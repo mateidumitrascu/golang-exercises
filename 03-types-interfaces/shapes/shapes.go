@@ -3,7 +3,11 @@
 // and returning a concrete type through an interface.
 package shapes
 
-import "sort"
+import (
+	"fmt"
+	"math"
+	"sort"
+)
 
 // Shape is the core abstraction. Keep interfaces small - that is the Go way.
 type Shape interface {
@@ -42,38 +46,117 @@ type Polygon struct{ Points []Point }
 // perimeter is the sum of all edges including the closing one (0 for fewer than
 // 2 points). Polygon.Scaled must not modify the receiver's slice.
 
-func (r Rect) Area() float64          { panic("TODO: Rect.Area") }
-func (r Rect) Perimeter() float64     { panic("TODO: Rect.Perimeter") }
-func (r Rect) Scaled(f float64) Shape { panic("TODO: Rect.Scaled") }
+func (r Rect) Area() float64 {
+	return r.H * r.W
+}
 
-func (c Circle) Area() float64          { panic("TODO: Circle.Area") }
-func (c Circle) Perimeter() float64     { panic("TODO: Circle.Perimeter") }
-func (c Circle) Scaled(f float64) Shape { panic("TODO: Circle.Scaled") }
+func (r Rect) Perimeter() float64 {
+	return 2*r.H + 2*r.W
+}
 
-func (p Polygon) Area() float64          { panic("TODO: Polygon.Area") }
-func (p Polygon) Perimeter() float64     { panic("TODO: Polygon.Perimeter") }
-func (p Polygon) Scaled(f float64) Shape { panic("TODO: Polygon.Scaled") }
+func (r Rect) Scaled(f float64) Shape {
+	return Rect{f * r.W, f * r.H}
+}
+
+func (c Circle) Area() float64 {
+	return math.Pi * c.R * c.R
+}
+
+func (c Circle) Perimeter() float64 {
+	return 2 * math.Pi * c.R
+}
+
+func (c Circle) Scaled(f float64) Shape {
+	return Circle{f * c.R}
+}
+
+func (p Polygon) Area() float64 {
+	if len(p.Points) < 3 {
+		return 0
+	}
+	var sum float64 = 0
+	for i := 0; i < len(p.Points)-1; i++ {
+		sum += p.Points[i].X*p.Points[i+1].Y - p.Points[i+1].X*p.Points[i].Y
+	}
+	return sum / 2
+}
+
+func (p Polygon) Perimeter() float64 {
+	if len(p.Points) < 2 {
+		return 0
+	}
+	var sum float64 = 0
+	for i := 0; i < len(p.Points)-1; i++ {
+		sum += math.Sqrt(square(p.Points[i].X-p.Points[i+1].X) + square(p.Points[i].Y-p.Points[i+1].Y))
+	}
+	c := len(p.Points)
+	sum += math.Sqrt(square(p.Points[0].X-p.Points[c-1].X) + square(p.Points[0].Y-p.Points[c-1].Y))
+	return sum
+}
+
+func (p Polygon) Scaled(f float64) Shape {
+	points := make([]Point, len(p.Points))
+	for i, pt := range p.Points {
+		points[i].X = pt.X * f
+		points[i].Y = pt.Y * f
+	}
+	return Polygon{points}
+}
 
 // TotalArea sums the areas. A nil slice totals 0.
-func TotalArea(shapes []Shape) float64 { panic("TODO: implement TotalArea") }
+func TotalArea(shapes []Shape) float64 {
+	if shapes == nil {
+		return 0
+	}
+	var sum float64 = 0
+
+	for _, shape := range shapes {
+		sum += shape.Area()
+	}
+	return sum
+}
 
 // Largest returns the shape with the greatest area, and false if the slice is
 // empty. Ties go to the earlier element.
-func Largest(shapes []Shape) (Shape, bool) { panic("TODO: implement Largest") }
+func Largest(shapes []Shape) (Shape, bool) {
+	if len(shapes) == 0 {
+		return nil, false
+	}
+	var largest Shape
+	var largestArea float64
+	for _, shape := range shapes {
+		if shape.Area() > largestArea {
+			largestArea = shape.Area()
+			largest = shape
+		}
+	}
+
+	return largest, true
+}
 
 // ByArea orders shapes by area ascending, breaking ties by perimeter ascending.
 type ByArea []Shape
 
-func (a ByArea) Len() int           { panic("TODO: ByArea.Len") }
-func (a ByArea) Less(i, j int) bool { panic("TODO: ByArea.Less") }
-func (a ByArea) Swap(i, j int)      { panic("TODO: ByArea.Swap") }
+func (a ByArea) Len() int {
+	return len(a)
+}
+
+func (a ByArea) Less(i, j int) bool {
+	return a[i].Area() < a[j].Area()
+}
+
+func (a ByArea) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
 
 // This line is a compile-time assertion that ByArea implements the interface.
 // It is a very common idiom - use it in your own code.
 var _ sort.Interface = ByArea(nil)
 
 // SortByArea sorts in place using ByArea. It must be a STABLE sort.
-func SortByArea(shapes []Shape) { panic("TODO: implement SortByArea") }
+func SortByArea(shapes []Shape) {
+	sort.Stable(ByArea(shapes))
+}
 
 // Describe returns a human description using a type switch:
 //
@@ -86,8 +169,53 @@ func SortByArea(shapes []Shape) { panic("TODO: implement SortByArea") }
 //
 // It takes `any`, not Shape: handling both the value and the pointer form of
 // each type in one switch is the point.
-func Describe(v any) string { panic("TODO: implement Describe") }
+func Describe(v any) string {
+	switch v.(type) {
+	case nil:
+		return "nothing"
+
+	case Rect, *Rect:
+		if r, ok := v.(Rect); ok {
+			return fmt.Sprintf("rect %gx%g", r.W, r.H)
+		}
+		r := *v.(*Rect)
+		return fmt.Sprintf("rect %gx%g", r.W, r.H)
+
+	case Circle, *Circle:
+		if c, ok := v.(Circle); ok {
+			return fmt.Sprintf("circle r=%g", c.R)
+		}
+		c := *v.(*Circle)
+		return fmt.Sprintf("circle r=%g", c.R)
+
+	case Polygon, *Polygon:
+		if p, ok := v.(Polygon); ok {
+			return fmt.Sprintf("polygon with %d sides", len(p.Points))
+		}
+		p := *v.(*Polygon)
+		return fmt.Sprintf("polygon with %d sides", len(p.Points))
+
+	case Shape:
+		return fmt.Sprintf("shape with area %g", v.(Shape).Area())
+
+	default:
+		return "not a shape"
+	}
+}
 
 // ScaleAll returns a new slice in which every element that also implements
 // Scaler is scaled by f. Elements that are not Scalers pass through unchanged.
-func ScaleAll(shapes []Shape, f float64) []Shape { panic("TODO: implement ScaleAll") }
+func ScaleAll(shapes []Shape, f float64) []Shape {
+	cp := make([]Shape, len(shapes))
+	copy(cp, shapes)
+	for i, s := range cp {
+		if sc, ok := s.(Scaler); ok {
+			cp[i] = sc.Scaled(f)
+		}
+	}
+	return cp
+}
+
+func square(x float64) float64 {
+	return x * x
+}
