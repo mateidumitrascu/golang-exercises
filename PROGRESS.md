@@ -25,7 +25,7 @@ Regenerate with `./gen_progress.sh` — your ticks are preserved.
 ## 03-types-interfaces
 
 - [ ] 03-types-interfaces/expr
-- [ ] 03-types-interfaces/nilcheck
+- [X] 03-types-interfaces/nilcheck
 - [X] 03-types-interfaces/options
 - [X] 03-types-interfaces/shapes
 - [ ] 03-types-interfaces/structtags

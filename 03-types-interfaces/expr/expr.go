@@ -7,16 +7,24 @@
 // That is Go's version of a sum type.
 package expr
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"log"
+	"math"
+)
 
 type Expr interface{ exprNode() }
 
-type Num struct{ Value float64 }
-type Var struct{ Name string }
-type Unary struct { // Op is always '-'
-	Op byte
-	X  Expr
-}
+type (
+	Num   struct{ Value float64 }
+	Var   struct{ Name string }
+	Unary struct { // Op is always '-'
+		Op byte
+		X  Expr
+	}
+)
+
 type Binary struct { // Op is one of + - * / ^
 	Op   byte
 	L, R Expr
@@ -51,7 +59,43 @@ var (
 // which errors.Is(err, ErrUnknownVar) is true. A nil child node, or an unknown
 // operator, is ErrBadNode.
 func Eval(e Expr, env map[string]float64) (float64, error) {
-	panic("TODO: implement Eval")
+	switch v := e.(type) {
+	case nil:
+		return 0, fmt.Errorf("%w: null node", ErrBadNode)
+	case Num:
+		return v.Value, nil
+
+	case Var:
+		return env[v.Name], nil
+
+	case Unary:
+		f, err := Eval(v.X, env)
+		return -1 * f, err
+
+	case Binary:
+		l, err := Eval(v.L, env)
+		if err != nil {
+			return 0, err
+		}
+		r, err := Eval(v.R, env)
+		if err != nil {
+			return 0, err
+		}
+		log.Printf("PERFORMING OPERATION %c WITH %f AND %f \n\n", v.Op, l, r)
+		return ops[v.Op](l, r)
+
+	case Call:
+		results := []float64{}
+		for _, exp := range v.Args {
+			r, err := Eval(exp, env)
+			if err != nil {
+				return 0, err
+			}
+			results = append(results, r)
+		}
+		return calls[v.Fn](results...)
+	}
+	return 0, nil
 }
 
 // String renders e with the FEWEST parentheses that still parse back to the
@@ -100,4 +144,62 @@ func Depth(e Expr) int {
 // returns false for a node (that node's children are skipped, siblings are not).
 func Walk(e Expr, fn func(Expr) bool) {
 	panic("TODO: implement Walk")
+}
+
+var ops = map[byte]func(a, b float64) (float64, error){
+	'+': func(a, b float64) (float64, error) {
+		return a + b, nil
+	},
+	'-': func(a, b float64) (float64, error) {
+		return a - b, nil
+	},
+	'*': func(a, b float64) (float64, error) {
+		return a * b, nil
+	},
+	'/': func(a, b float64) (float64, error) {
+		if b == 0 {
+			return 0, ErrDivByZero
+		}
+		return a / b, nil
+	},
+	'^': func(a, b float64) (float64, error) {
+		if a == 0 && b == 0 {
+			return 0, ErrDivByZero
+		}
+		return math.Pow(a, b), nil
+	},
+}
+
+var calls = map[string]func(args ...float64) (float64, error){
+	"abs": func(args ...float64) (float64, error) {
+		if len(args) != 1 {
+			return 0, fmt.Errorf("%w: provided %d arguments instead of 1", ErrBadArity, len(args))
+		}
+		return math.Abs(args[0]), nil
+	},
+
+	"sqrt": func(args ...float64) (float64, error) {
+		if len(args) != 1 {
+			return 0, fmt.Errorf("%w: provided %d arguments instead of 1", ErrBadArity, len(args))
+		}
+		return math.Sqrt(args[0]), nil
+	},
+	"min": func(args ...float64) (float64, error) {
+		if len(args) != 2 {
+			return 0, fmt.Errorf("%w: provided %d arguments instead of 2", ErrBadArity, len(args))
+		}
+		return math.Min(args[0], args[1]), nil
+	},
+	"max": func(args ...float64) (float64, error) {
+		if len(args) != 2 {
+			return 0, fmt.Errorf("%w: provided %d arguments instead of 2", ErrBadArity, len(args))
+		}
+		return math.Max(args[0], args[1]), nil
+	},
+	"pow": func(args ...float64) (float64, error) {
+		if len(args) != 2 {
+			return 0, fmt.Errorf("%w: provided %d arguments instead of 2", ErrBadArity, len(args))
+		}
+		return math.Pow(args[0], args[1]), nil
+	},
 }
